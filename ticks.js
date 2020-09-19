@@ -22,16 +22,51 @@
     const ticks = [];
 
     const heap = [];
-    const items = new Array(300).fill(null).map((_, i) => i);
+    const items = Array.from({length: 300}, (_, i) => i + 1);
 
     items.forEach(item => heap.push(item));
 
+    function recalcAVG(execTime) {
+        ticks.push(execTime);
+        if (ticks.length > 100) ticks.shift();
+
+        AVG_PROCESS_TIME = ticks.length > 10
+            ? ticks.reduce((summ, el) => summ + el) / ticks.length
+            : AVG_PROCESS_TIME;
+
+        console.log(`AVG_PROCESS_TIME = ${AVG_PROCESS_TIME}`);
+
+        // если таск выполняется больше половины всего времени, то нужно сделать вызовы реже
+        if (AVG_PROCESS_TIME > PERIOD / 2) {
+            PERIOD = Math.round(AVG_PROCESS_TIME * 2);
+            console.log(`   EXECUTION IS TOO SLOW, SET NEW PERIOD ${PERIOD}`);
+        } else if (PERIOD / 2.5 > AVG_PROCESS_TIME) {
+            PERIOD = Math.round(AVG_PROCESS_TIME * 2);
+            console.log(`   EXECUTION IS QUITE FAST, SET NEW PERIOD ${PERIOD}`);
+        }
+
+    }
 
     async function loop() {
+        function createTask() {
+            if (Math.random() > 0.5) {
+                console.log('Wow a new task!');
+                heap.push(Math.random());
+            }
+
+            process();
+        }
+
         async function process() {
             const item = heap.shift();
 
             new Promise((res) => {
+                if (!item) {
+                    console.log('NO ITEMS IN HEAP, WAIT FOR IT\n');
+
+                    return setTimeout(createTask, 5 * 1000); // 5s
+                }
+
                 const start = Date.now();
 
                 handleItem(item);
@@ -39,28 +74,15 @@
                 const stop = Date.now();
                 const execTime = stop - start;
 
-                // AVG_PROCESS_TIME = (AVG_PROCESS_TIME + execTime) / 2;
-                ticks.push(execTime);
-                if (ticks.length > 100) ticks.shift();
-                AVG_PROCESS_TIME = ticks.reduce((summ, el) => summ + el) / ticks.length;
-                console.log(`AVG_PROCESS_TIME = ${AVG_PROCESS_TIME}`);
-
-                // если таск выполняется больше половины всего времени, то нужно сделать вызовы реже
-                if (AVG_PROCESS_TIME > PERIOD / 2) {
-                    PERIOD = AVG_PROCESS_TIME * 2;
-                    console.log(`   EXECUTION IS TOO SLOW, SET NEW PERIOD ${PERIOD}`);
-                } else if (PERIOD / 2.5 > AVG_PROCESS_TIME) {
-                    PERIOD = AVG_PROCESS_TIME * 2;
-                    console.log(`   EXECUTION IS QUITE FAST, SET NEW PERIOD ${PERIOD}`);
-                }
+                recalcAVG(execTime);
 
                 res();
 
                 const nextCallIn = Math.round(execTime > PERIOD
                     ? ONE_LOOP // если время выполнения было дольше 3 лупов, то даем браузеру передышку на остальные таски
-                    : AVG_PROCESS_TIME) // иначе ждем остаток времени
+                    : PERIOD - execTime) // иначе ждем остаток времени
 
-                console.log(`Done in ${execTime}, next call in ${nextCallIn}`);
+                console.log(`Done in ${execTime}, next call in ${nextCallIn}\n`);
 
                 setTimeout(process, nextCallIn);
             })
